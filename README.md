@@ -1,4 +1,4 @@
-# Pocket TTS (Rust/Candle)
+# Pocket TTS (Rust/Candle) - with a Win32 DLL
 
 A native Rust port of [Kyutai's Pocket TTS](https://github.com/kyutai-labs/pocket-tts) using [Candle](https://github.com/huggingface/candle) for tensor operations.
 

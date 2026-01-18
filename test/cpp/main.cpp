@@ -65,7 +65,7 @@ int main() {
 
     std::cout << "Loading model..." << std::endl;
     // Provide the path where models are stored
-    const char* model_dir = "D:/Code/mebrain-figures/models/tts";
+    const char* model_dir = "./models/tts";
     void* model = load_model(model_dir, "b6369a24");
     if (!model) {
         std::cerr << "Failed to load model" << std::endl;

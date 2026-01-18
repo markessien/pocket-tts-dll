@@ -18,24 +18,7 @@ use hf_hub::{Repo, RepoType};
 #[cfg(not(target_arch = "wasm32"))]
 pub fn download_if_necessary(file_path: &str) -> Result<PathBuf> {
     if file_path.starts_with("hf://") {
-        let path = file_path.trim_start_matches("hf://");
-        let parts: Vec<&str> = path.split('/').collect();
-        if parts.len() < 3 {
-            anyhow::bail!(
-                "Invalid hf:// path: {}. Expected hf://repo_owner/repo_name/filename[@revision]",
-                file_path
-            );
-        }
-        let repo_id = format!("{}/{}", parts[0], parts[1]);
-        let filename_with_revision = parts[2..].join("/");
-
-        // Parse optional revision from filename (e.g., "file.safetensors@abc123")
-        let (filename, revision) = if let Some(at_pos) = filename_with_revision.rfind('@') {
-            let (f, r) = filename_with_revision.split_at(at_pos);
-            (f.to_string(), Some(r[1..].to_string())) // Skip the '@'
-        } else {
-            (filename_with_revision, None)
-        };
+        let (repo_id, filename, revision) = parse_hf_path(file_path)?;
 
         // Use ApiBuilder to support HF_TOKEN from environment
         let token = std::env::var("HF_TOKEN").ok();
@@ -55,6 +38,54 @@ pub fn download_if_necessary(file_path: &str) -> Result<PathBuf> {
     } else {
         Ok(PathBuf::from(file_path))
     }
+}
+
+/// Resolve a file path relative to a local directory, handling hf:// paths.
+pub fn resolve_from_dir(file_path: &str, model_dir: &std::path::Path) -> Result<PathBuf> {
+    if file_path.starts_with("hf://") {
+        let (_repo_id, filename, _revision) = parse_hf_path(file_path)?;
+        let local_path = model_dir.join(&filename);
+        if local_path.exists() {
+            Ok(local_path)
+        } else {
+            anyhow::bail!(
+                "File {} not found in model directory {}",
+                filename,
+                model_dir.display()
+            )
+        }
+    } else {
+        let path = std::path::Path::new(file_path);
+        if path.is_absolute() {
+            Ok(path.to_path_buf())
+        } else {
+            Ok(model_dir.join(file_path))
+        }
+    }
+}
+
+/// Parse an hf:// path into (repo_id, filename, revision)
+fn parse_hf_path(file_path: &str) -> Result<(String, String, Option<String>)> {
+    let path = file_path.trim_start_matches("hf://");
+    let parts: Vec<&str> = path.split('/').collect();
+    if parts.len() < 3 {
+        anyhow::bail!(
+            "Invalid hf:// path: {}. Expected hf://repo_owner/repo_name/filename[@revision]",
+            file_path
+        );
+    }
+    let repo_id = format!("{}/{}", parts[0], parts[1]);
+    let filename_with_revision = parts[2..].join("/");
+
+    // Parse optional revision from filename (e.g., "file.safetensors@abc123")
+    let (filename, revision) = if let Some(at_pos) = filename_with_revision.rfind('@') {
+        let (f, r) = filename_with_revision.split_at(at_pos);
+        (f.to_string(), Some(r[1..].to_string())) // Skip the '@'
+    } else {
+        (filename_with_revision, None)
+    };
+
+    Ok((repo_id, filename, revision))
 }
 
 /// WASM version: Only supports local file paths

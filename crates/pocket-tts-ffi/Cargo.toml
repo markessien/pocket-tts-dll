@@ -1,0 +1,14 @@
+[package]
+name = "pocket-tts-ffi"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "pocket_tts_ffi"
+crate-type = ["cdylib"]
+
+[dependencies]
+pocket-tts = { path = "../pocket-tts" }
+libc = "0.2"
+anyhow = "1.0"
+candle-core = "0.9.1"

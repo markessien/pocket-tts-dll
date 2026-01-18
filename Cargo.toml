@@ -4,6 +4,7 @@ members = [
     "crates/pocket-tts",
     "crates/pocket-tts-cli",
     "crates/pocket-tts-bindings",
+    "crates/pocket-tts-ffi",
 
 ]
 

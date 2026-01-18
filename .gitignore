@@ -90,3 +90,8 @@ profile_output*
 CLAUDE.md
 QWEN.md
 .claude/
+
+build_errors.txt
+*.pdb
+*.wav
+*.obj

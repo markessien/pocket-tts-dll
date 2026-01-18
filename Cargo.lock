@@ -2532,6 +2532,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pocket-tts-ffi"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "candle-core",
+ "libc",
+ "pocket-tts",
+]
+
+[[package]]
 name = "portable-atomic"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

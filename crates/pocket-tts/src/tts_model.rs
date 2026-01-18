@@ -60,6 +60,31 @@ impl TTSModel {
         )
     }
 
+    /// Load a model from a specific local directory
+    pub fn load_from_dir<P: AsRef<std::path::Path>>(model_dir: P, variant: &str) -> Result<Self> {
+        Self::load_from_dir_with_params(
+            model_dir.as_ref(),
+            variant,
+            defaults::TEMPERATURE,
+            defaults::LSD_DECODE_STEPS,
+            defaults::EOS_THRESHOLD,
+        )
+    }
+
+    /// Load from a local directory with custom generation parameters
+    pub fn load_from_dir_with_params(
+        model_dir: &std::path::Path,
+        variant: &str,
+        temp: f32,
+        lsd_decode_steps: usize,
+        eos_threshold: f32,
+    ) -> Result<Self> {
+        let config_path = find_config_path(variant, Some(model_dir))?;
+        let config = load_config(&config_path)?;
+
+        Self::from_config_internal(config, temp, lsd_decode_steps, eos_threshold, Some(model_dir))
+    }
+
     /// Load with custom generation parameters
     pub fn load_with_params(
         variant: &str,
@@ -68,10 +93,10 @@ impl TTSModel {
         eos_threshold: f32,
     ) -> Result<Self> {
         // Find config file - look relative to the Rust crate, then fall back to Python location
-        let config_path = find_config_path(variant)?;
+        let config_path = find_config_path(variant, None)?;
         let config = load_config(&config_path)?;
 
-        Self::from_config(config, temp, lsd_decode_steps, eos_threshold)
+        Self::from_config_internal(config, temp, lsd_decode_steps, eos_threshold, None)
     }
 
     /// Load model with quantized weights for reduced memory footprint
@@ -139,11 +164,21 @@ impl TTSModel {
     }
 
     /// Create model from configuration
-    fn from_config(
+    pub fn from_config(
         config: Config,
         temp: f32,
         lsd_decode_steps: usize,
         eos_threshold: f32,
+    ) -> Result<Self> {
+        Self::from_config_internal(config, temp, lsd_decode_steps, eos_threshold, None)
+    }
+
+    fn from_config_internal(
+        config: Config,
+        temp: f32,
+        lsd_decode_steps: usize,
+        eos_threshold: f32,
+        model_dir: Option<&std::path::Path>,
     ) -> Result<Self> {
         let device = Device::Cpu;
         let dtype = DType::F32;
@@ -155,15 +190,22 @@ impl TTSModel {
                 .weights_path
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("weights_path not specified in config"))?;
-            let weights_file = crate::weights::download_if_necessary(weights_path)?;
+            let weights_file = if let Some(dir) = model_dir {
+                crate::weights::resolve_from_dir(weights_path, dir)?
+            } else {
+                crate::weights::download_if_necessary(weights_path)?
+            };
 
             // Load safetensors with VarBuilder
             let vb =
                 unsafe { VarBuilder::from_mmaped_safetensors(&[weights_file], dtype, &device)? };
 
-            // Download tokenizer
-            let tokenizer_path =
-                crate::weights::download_if_necessary(&config.flow_lm.lookup_table.tokenizer_path)?;
+            // Download/Resolve tokenizer
+            let tokenizer_path = if let Some(dir) = model_dir {
+                crate::weights::resolve_from_dir(&config.flow_lm.lookup_table.tokenizer_path, dir)?
+            } else {
+                crate::weights::download_if_necessary(&config.flow_lm.lookup_table.tokenizer_path)?
+            };
 
             // Build conditioner
             let conditioner = LUTConditioner::new(
@@ -773,8 +815,16 @@ impl TTSModel {
 }
 
 /// Find the config file path for a variant
-fn find_config_path(variant: &str) -> Result<std::path::PathBuf> {
+fn find_config_path(variant: &str, model_dir: Option<&std::path::Path>) -> Result<std::path::PathBuf> {
     let filename = format!("{}.yaml", variant);
+
+    // 0. Try provided model_dir first
+    if let Some(dir) = model_dir {
+        let path = dir.join(&filename);
+        if path.exists() {
+            return Ok(path);
+        }
+    }
 
     // 1. Try relative to Rust crate (crates/pocket-tts/config)
     let crate_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -891,7 +941,7 @@ mod tests {
     #[test]
     fn test_find_config_path() {
         // This MUST pass now that we've moved the config into the crate
-        let result = find_config_path("b6369a24");
+        let result = find_config_path("b6369a24", None);
         assert!(result.is_ok(), "Config file should be found");
         let path = result.unwrap();
         assert!(path.exists(), "Config file path should exist");

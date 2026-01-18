@@ -4,6 +4,9 @@ A native Rust port of [Kyutai's Pocket TTS](https://github.com/kyutai-labs/pocke
 
 Text-to-speech that runs entirely on CPU—no Python, no GPU required.
 
+## Notes on this version
+This is a fork that creates a win32 dll for Pocket TTS, so that it can be used from C++. Open test/cpp/main.cpp to see how to use it.
+
 ## Features
 
 - **Pure Rust** - No Python runtime, just a single binary
